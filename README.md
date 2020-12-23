@@ -8,4 +8,4 @@ To run this module on your arduino you will need:
 - Vibration Motor
 
 ## Example Setup
-![images](example.jpg)
+![example board](images/example.jpg)
