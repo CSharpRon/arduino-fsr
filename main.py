@@ -22,7 +22,7 @@ import pandas as pd
 import serial
 import time
 
-hardware_enabled = False
+hardware_enabled = True
 if hardware_enabled:
     arduino_port = "/dev/ttyUSB0"
 
@@ -78,13 +78,24 @@ def main():
 
     if hardware_enabled:
         while True:
-            """ Get 2 samples (one each tenth of a second) and average. """
-            value1 = int(FSR.readline().decode("utf-8").rstrip())
-            time.sleep(0.1)
-            value2 = int(FSR.readline().decode("utf-8").rstrip())
-            average = (value1 + value2) / 2.0
 
-            print("Average reading over .2 seconds: {}".format(average))
+            """ Get 5 samples (one every 200 ms) and average. """
+            values = []
+            min = 1000
+            max = 0
+
+            for x in range(5):
+                value = int(FSR.readline().decode("utf-8").rstrip())
+                values.append(value)
+                if value > max:
+                    max = value
+                if value < min:
+                    min = value
+                time.sleep(0.2) 
+
+            average = (sum(values) - min - max) / 3.0
+
+            print("Tight Average reading over 200ms: {}".format(average))
 
             """ Use the average for the prediction. """
             mode = svm.predict([[average]])

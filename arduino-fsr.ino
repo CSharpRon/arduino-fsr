@@ -49,5 +49,4 @@ void loop() {
   // Always get fsrReading and print to Serial  
   int fsrReading = analogRead(FSR);  
   Serial.println(fsrReading);
-  delay(100); 
 }
