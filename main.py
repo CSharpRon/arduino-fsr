@@ -11,23 +11,28 @@ Vibration responses are classified as one of these states:
 - MEDIUM
 - HIGH
 
-Sources: 
+Sources:
 - https://www.instructables.com/Pyduino-Interfacing-Arduino-with-Python-through-se/
 """
-from classifier import Classifier
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import classification_report
+from sklearn.svm import SVC
+import numpy as np
 import pandas as pd
 import serial
 import time
 
-arduino_port = "/dev/ttyUSB0"
+hardware_enabled = False
+if hardware_enabled:
+    arduino_port = "/dev/ttyUSB0"
 
-print("Connecting to arduino on {}".format(arduino_port))
-FSR = serial.Serial(port=arduino_port, baudrate=9600)
-MOTOR_PIN = 11  # Vibration Motor connected on D11
-CLASSIFIER = None
+    print("Connecting to arduino on {}".format(arduino_port))
+    FSR = serial.Serial(port=arduino_port, baudrate=9600)
+    MOTOR_PIN = 11  # Vibration Motor connected on D11
+    CLASSIFIER = None
 
-FSR.readline()
-print("Connected!")
+    FSR.readline()
+    print("Connected!")
 
 # Vibration Modes
 HIGH = 153
@@ -57,26 +62,33 @@ def vibrate_motor(vibration_mode):
 
 
 def main():
-    averages = pd.read_csv("fsr-classified-averages.csv")
 
-    classifier = Classifier()
-    classifier.create_data_set(averages)
-    classifier.train()
+    measurements = pd.read_csv("forces-dataset.csv")
 
-    # print(classifier.classification_report())
+    # Using the means where min and max are removed
+    X = measurements["TightMean"].to_numpy()
+    X = X.reshape(-1, 1)
+    Y = measurements["Class"].to_numpy()
+    x_train, x_test, y_train, y_test = train_test_split(
+        X, Y, test_size=0.20
+    )
 
-    while True:
-        """ Get 2 samples (one each tenth of a second) and average. """
-        value1 = int(FSR.readline().decode("utf-8").rstrip())
-        time.sleep(0.1)
-        value2 = int(FSR.readline().decode("utf-8").rstrip())
-        average = (value1 + value2) / 2.0
+    svm = SVC(kernel="linear")
+    svm.fit(X, Y)
 
-        print("Average reading over .2 seconds: {}".format(average))
+    if hardware_enabled:
+        while True:
+            """ Get 2 samples (one each tenth of a second) and average. """
+            value1 = int(FSR.readline().decode("utf-8").rstrip())
+            time.sleep(0.1)
+            value2 = int(FSR.readline().decode("utf-8").rstrip())
+            average = (value1 + value2) / 2.0
 
-        """ Use the average for the prediction. """
-        mode = classifier.predict([[average]])
-        vibrate_motor(mode)
+            print("Average reading over .2 seconds: {}".format(average))
+
+            """ Use the average for the prediction. """
+            mode = svm.predict([[average]])
+            vibrate_motor(mode[0])
 
 
 if __name__ == "__main__":

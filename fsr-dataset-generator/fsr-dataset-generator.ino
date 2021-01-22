@@ -14,18 +14,12 @@
 #define MEDIUM 120
 #define HI 153
 
-#include <Arduino_KNN.h>
-
 // Constants needed to use kNN.
 const int CLASSES = 4;
-const int K = 5;
 const int SAMPLE_SIZE = 5;
 
 bool sample = true;                                           // When true, program starts by taking samples
-float fsrData[SAMPLE_SIZE];                                   // Holds data captured by the FSR
 String label[CLASSES] = {"Off", "Low", "Medium", "High"};     // Labels for each of the vibration states
-
-KNNClassifier forceClassifier(SAMPLE_SIZE);
 
 /* To make this work, you need one FSR and one Vibration Motor.
  * Connect one end of FSR to power, the other end to Analog 0.
@@ -41,23 +35,16 @@ void loop() {
   /* On initialization, sample will be equal to true. This will let you take toggle it off once you trained your model.
      Output is saved to serial monitor and global forceCLassifier variable..
   */  
-  if (sample) {
-      // Get samples of data in each class
-      for (int c = 0; c < CLASSES; c++) {
-        sampleData(c);
-      }
-      sample = false; // Our model is now trained!
+
+  Serial.println("Class,Sample1,Sample2,Sample3,Sample4,Sample5,Mean,TightMean");
+
+  // Get samples of data in each class
+  for (int c = 0; c < CLASSES; c++) {
+    sampleData(c);
   }
 
-  // As long as our model is trained, we can classify data!
-  getFSRReading(fsrData);
-  int classification = forceClassifier.classify(fsrData, K);
-
-  Serial.print(label[classification]);
-  Serial.println(" - Force Detected");
-
-  sendMotorVibration(classification);
-  delay(100);
+  // 1 second delay
+  delay(1000);
 }
 
 // Runs 5 samples a second for 10 seconds total. Data will be used to train kNN.
@@ -71,47 +58,63 @@ void sampleData(int classNumber) {
   Serial.println(" in 5 seconds...");
   delay(5000);
 
-  // Begin taking sample
-  Serial.println(label[classNumber]);
-
-  // At each step (1 second), 5 samples are taken and used as an example of the force class.
-  for (int i = 0; i < 10; i++) {
-
-    getFSRReading(fsrData);
-
-    forceClassifier.addExample(fsrData, classNumber);
+  // Take samples at each step
+  for (int i = 0; i < 25; i++) { 
+    // Begin taking sample
+    Serial.print(classNumber);
+    Serial.print(",");
+    getFSRReading(); 
   }
 }
 
-// Populates the passed in array with data taken at each 200ms step defined in SAMPLE_SIZE.
-void getFSRReading(float data[]) {
+// Populates the passed in array with data taken at each ms step defined by SAMPLE_SIZE.
+void getFSRReading() {
+  
+  float mean = 0;
+  float tightMean = 0;
+  float values[100];
+  int min = 10000;
+  int max = 0;
 
+  // Get the values
   for (int j = 0; j < SAMPLE_SIZE; j++) {
     int fsrReading = analogRead(FSR);  
-    data[j] = fsrReading;
-    Serial.println(fsrReading);
-    delay(200);
+    values[j] = fsrReading;
+    if (fsrReading < min) {
+      min = fsrReading;
+    }
+    if (fsrReading > max) {
+      max = fsrReading;
+    }
+    delay(1000/SAMPLE_SIZE);
   }
-  
-}
 
-// Send a vibration to the motor based on one of the four states (off, low, medium, high).
-void sendMotorVibration(int mode) {
+  // Do the calculations after values have been collected
+  for (int v = 0; v < SAMPLE_SIZE; v++) {
+    Serial.print(values[v]);
+    Serial.print(",");
+    
+    // Adjust mean values
+    mean = mean + values[v]; 
+    
+  }
 
-   switch (mode) {
-      case 0:
-        analogWrite(VIB, OFF);
-        break;
-      case 1:
-        analogWrite(VIB, LO);
-        break;
-      case 2:
-        analogWrite(VIB, MEDIUM);
-        break;
-      case 3:
-        analogWrite(VIB, HI);
-        break;
-      default:
-        break;
-   }
-}
+  // If mean is 0, return to avoid divide by 0 error
+  if (mean == 0) {
+    Serial.println("0,0");
+    return;
+  }
+
+  tightMean = mean;
+  mean = mean / SAMPLE_SIZE;
+  if (max != min) {
+    tightMean = tightMean - max - min;
+    tightMean = tightMean / (SAMPLE_SIZE - 2);
+  } else {
+    tightMean = mean;
+  }
+
+  Serial.print(mean);
+  Serial.print(",");
+  Serial.println(tightMean);
+} 
